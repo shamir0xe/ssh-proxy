@@ -9,6 +9,7 @@ import (
 type Config interface {
 	Get(string) (any, error)
 	GetString(string) (*string, error)
+	GetInteger(string) (*int, error)
 }
 
 type ViperConfig struct {
@@ -18,7 +19,7 @@ type ViperConfig struct {
 func NewViperConfig() (Config, error) {
 	vp := viper.New()
 	vp.SetConfigName("config")
-	vp.AddConfigPath("../")
+	vp.AddConfigPath(".")
 	vp.AutomaticEnv()
 	if err := vp.ReadInConfig(); err != nil {
 		return nil, err
@@ -44,4 +45,15 @@ func (cf *ViperConfig) GetString(token string) (*string, error) {
 		return &stringValue, nil
 	}
 	return nil, fmt.Errorf("Cannot read the string value")
+}
+
+func (cf *ViperConfig) GetInteger(token string) (*int, error) {
+	res, err := cf.Get(token)
+	if err != nil {
+		return nil, err
+	}
+	if intValue, ok := res.(int); ok {
+		return &intValue, nil
+	}
+	return nil, fmt.Errorf("Cannot read the integer value")
 }

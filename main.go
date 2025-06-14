@@ -19,6 +19,7 @@ func runSSHTunnel(
 	url string,
 	port string,
 	password string,
+	socksPort string,
 ) {
 	defer wg.Done()
 
@@ -33,9 +34,13 @@ func runSSHTunnel(
 
 			// Use a goroutine to run the command
 			go func() {
-				cmd := exec.CommandContext(tunnelCtx, "sshpass", "-p", password,
-					"ssh", "-D", port, "-C", "-q", "-N", url)
+				cmd := exec.CommandContext(
+					tunnelCtx, "sshpass", "-p", password,
+					"ssh", "-D", socksPort, "-p", port,
+					"-C", "-q", "-N", url,
+				)
 
+				log.Printf("Going to start SSH, %v", cmd)
 				err := cmd.Run()
 				if err != nil {
 					log.Printf("SSH command error: %v", err)
@@ -56,8 +61,10 @@ func monitorTunnel(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	restartChan chan<- bool,
+	timeInterval int,
 ) {
 	defer wg.Done()
+	interval := time.Duration(timeInterval) * time.Second
 
 	for {
 		select {
@@ -65,14 +72,12 @@ func monitorTunnel(
 			log.Println("Health check stopping due to context cancellation")
 			restartChan <- true
 			return
-		case <-time.After(30 * time.Second):
-			log.Println("Checking tunnel health...")
-
+		case <-time.After(interval):
 			cmd := exec.Command("proxychains4", "curl", "-4", "icanhazip.com")
 			_, err := cmd.CombinedOutput()
 
 			if err != nil {
-				log.Printf("Health check failed: %v", err)
+				log.Printf("Health check failed ❌: %v", err)
 				restartChan <- true
 			} else {
 				log.Printf("Health check success ✅")
@@ -92,12 +97,22 @@ func main() {
 		panic(err)
 	}
 
-	port, err := vp.GetString("server.port")
+	serverPort, err := vp.GetString("server.port")
 	if err != nil {
 		panic(err)
 	}
 
 	password, err := vp.GetString("server.password")
+	if err != nil {
+		panic(err)
+	}
+
+	socksPort, err := vp.GetString("socks.port")
+	if err != nil {
+		panic(err)
+	}
+
+	timerInterval, err := vp.GetInteger("health_check.interval")
 	if err != nil {
 		panic(err)
 	}
@@ -109,8 +124,8 @@ func main() {
 	restartChan := make(chan bool)
 
 	wg.Add(2)
-	go runSSHTunnel(ctx, &wg, restartChan, *url, *port, *password)
-	go monitorTunnel(ctx, &wg, restartChan)
+	go runSSHTunnel(ctx, &wg, restartChan, *url, *serverPort, *password, *socksPort)
+	go monitorTunnel(ctx, &wg, restartChan, *timerInterval)
 
 	// Create a channel to listen for interrupt signals
 	signalChan := make(chan os.Signal, 1)
