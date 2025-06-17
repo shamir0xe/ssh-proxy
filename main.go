@@ -4,128 +4,62 @@ import (
 	"context"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"ssh_proxy/dependencies"
+	"ssh_proxy/services"
 	"sync"
 	"syscall"
-	"time"
+
+	"go.uber.org/dig"
 )
 
-func runSSHTunnel(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	restartChan <-chan bool,
-	url string,
-	port string,
-	password string,
-	socksPort string,
-) {
-	defer wg.Done()
+func newContainer() (*dig.Container, error) {
+	container := dig.New()
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("SSH tunnel shutting down due to context cancellation")
-			return
-		default:
-			log.Println("Starting SSH tunnel...")
-			tunnelCtx, cancel := context.WithCancel(ctx)
-
-			// Use a goroutine to run the command
-			go func() {
-				cmd := exec.CommandContext(
-					tunnelCtx, "sshpass", "-p", password,
-					"ssh", "-D", socksPort, "-p", port,
-					"-C", "-q", "-N", url,
-				)
-
-				log.Printf("Going to start SSH, %v", cmd)
-				err := cmd.Run()
-				if err != nil {
-					log.Printf("SSH command error: %v", err)
-				} else {
-					log.Println("SSH command exited unexpectedly")
-				}
-			}()
-			log.Println("SSH tunnel is running, waiting for restart signal")
-
-			<-restartChan
-			log.Println("Restart signal received, restarting SSH tunnel")
-			cancel()
-		}
+	if err := container.Provide(services.NewMonitoringService); err != nil {
+		return nil, err
 	}
-}
-
-func monitorTunnel(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	restartChan chan<- bool,
-	timeInterval int,
-) {
-	defer wg.Done()
-	interval := time.Duration(timeInterval) * time.Second
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Health check stopping due to context cancellation")
-			restartChan <- true
-			return
-		case <-time.After(interval):
-			cmd := exec.Command("proxychains4", "curl", "-4", "icanhazip.com")
-			_, err := cmd.CombinedOutput()
-
-			if err != nil {
-				log.Printf("Health check failed ❌: %v", err)
-				restartChan <- true
-			} else {
-				log.Printf("Health check success ✅")
-			}
-		}
+	if err := container.Provide(services.NewSSHProxyService); err != nil {
+		return nil, err
 	}
+	if err := container.Provide(dependencies.NewViperConfig); err != nil {
+		return nil, err
+	}
+
+	return container, nil
 }
 
 func main() {
-	vp, err := dependencies.NewViperConfig()
+	container, err := newContainer()
 	if err != nil {
 		panic(err)
 	}
+	log.Println("Container initialized")
 
-	url, err := vp.GetString("server.url")
-	if err != nil {
-		panic(err)
-	}
-
-	serverPort, err := vp.GetString("server.port")
-	if err != nil {
-		panic(err)
-	}
-
-	password, err := vp.GetString("server.password")
-	if err != nil {
-		panic(err)
-	}
-
-	socksPort, err := vp.GetString("socks.port")
-	if err != nil {
-		panic(err)
-	}
-
-	timerInterval, err := vp.GetInteger("health_check.interval")
-	if err != nil {
-		panic(err)
-	}
-
+	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Create wait group
 	var wg sync.WaitGroup
+
+	// define restart channel
 	restartChan := make(chan bool)
 
-	wg.Add(2)
-	go runSSHTunnel(ctx, &wg, restartChan, *url, *serverPort, *password, *socksPort)
-	go monitorTunnel(ctx, &wg, restartChan, *timerInterval)
+	err = container.Invoke(func(sc services.SSHProxyInterface) error {
+		go sc.Run(ctx, &wg, restartChan)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = container.Invoke(func(sc services.MonitoringServiceInterface) error {
+		go sc.Run(ctx, &wg, restartChan)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	// Create a channel to listen for interrupt signals
 	signalChan := make(chan os.Signal, 1)

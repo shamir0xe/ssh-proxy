@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config interface {
+type ConfigInterface interface {
 	Get(string) (any, error)
 	GetString(string) (*string, error)
 	GetInteger(string) (*int, error)
@@ -16,7 +16,7 @@ type ViperConfig struct {
 	config *viper.Viper
 }
 
-func NewViperConfig() (Config, error) {
+func NewViperConfig() (ConfigInterface, error) {
 	vp := viper.New()
 	vp.SetConfigName("config")
 	vp.AddConfigPath(".")
