@@ -45,8 +45,15 @@ func (sc *monitoringService) Run(
 	}
 	timeoutDuration := time.Duration(*timeout) * time.Second
 
+	conLimit, err := vp.GetInteger("health_check.consecutive_limit")
+	if err != nil {
+		return fmt.Errorf("Please provide health_check.consecutive_limit")
+	}
+
 	timer := time.NewTimer(0)
 	defer timer.Stop()
+
+	conLoss := 0
 
 	for {
 		select {
@@ -55,7 +62,7 @@ func (sc *monitoringService) Run(
 			return ctx.Err()
 
 		case <-timer.C:
-			func() {
+			if func() bool {
 				// Run the health check logic
 				timedCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
 				defer cancel()
@@ -71,11 +78,26 @@ func (sc *monitoringService) Run(
 					} else {
 						log.Printf("Output from failed command: %s", string(output))
 					}
-					restartChan <- true
+					conLoss++
+					log.Printf("consecutive loss: %d", conLoss)
+					if conLoss > *conLimit {
+						conLoss = 0
+						cmd := exec.CommandContext(ctx, "sudo", "systemctl", "restart", "ptunnel.service")
+						_, err = cmd.CombinedOutput()
+						if err != nil {
+							log.Printf("Cannot restart the ptunnel service ❌")
+						}
+
+						return true
+					}
 				} else {
+					conLoss = 0
 					log.Printf("success ✅")
 				}
-			}()
+				return false
+			}() {
+				restartChan <- true
+			}
 
 			timer.Reset(interval)
 		}

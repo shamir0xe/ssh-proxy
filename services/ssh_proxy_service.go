@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"ssh_proxy/dependencies"
 	"sync"
+	"time"
 )
 
 type SSHProxyInterface interface {
@@ -55,6 +56,11 @@ func (sc *sshProxyService) Run(
 		return err
 	}
 
+	waitTime, err := vp.GetInteger("health_check.wait_time")
+	if err != nil {
+		return err
+	}
+
 	for {
 		log.Println("Starting SSH tunnel...")
 		tunnelCtx, cancel := context.WithCancel(ctx)
@@ -89,6 +95,10 @@ func (sc *sshProxyService) Run(
 			}
 		}()
 		if !loop {
+			timer := time.NewTimer(time.Second * time.Duration(*waitTime))
+			log.Printf("Wait before start again for %d s", *waitTime)
+			<-timer.C
+			timer.Stop()
 			break
 		}
 	}
