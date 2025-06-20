@@ -32,11 +32,18 @@ func (sc *monitoringService) Run(
 	wg.Add(1)
 	defer wg.Done()
 	vp := sc.config
+
 	timerInterval, err := vp.GetInteger("health_check.interval")
 	if err != nil {
 		return fmt.Errorf("could not find proper filed: %v", err)
 	}
 	interval := time.Duration(*timerInterval) * time.Second
+
+	timeout, err := vp.GetInteger("health_check.timeout")
+	if err != nil {
+		return fmt.Errorf("could not find proper filed: %v", err)
+	}
+	timeoutDuration := time.Duration(*timeout) * time.Second
 
 	for {
 		select {
@@ -44,15 +51,21 @@ func (sc *monitoringService) Run(
 			log.Println("Health check stopping due to context cancellation")
 			return nil
 		case <-time.After(interval):
-			cmd := exec.Command("proxychains4", "curl", "-4", "icanhazip.com")
-			_, err := cmd.CombinedOutput()
-
-			if err != nil {
-				log.Printf("Health check failed ❌: %v", err)
-				restartChan <- true
-			} else {
-				log.Printf("Health check success ✅")
-			}
+			func() {
+				timedCtx, cancel := context.WithTimeout(ctx, *&timeoutDuration)
+				defer cancel()
+				cmd := exec.CommandContext(timedCtx, "proxychains4", "curl", "-4", "icanhazip.com")
+				_, err := cmd.CombinedOutput()
+				if err != nil {
+					log.Printf("Health check failed ❌: %v", err)
+					if timedCtx.Err() == context.DeadlineExceeded {
+						log.Printf("Timeout exceeded")
+					}
+					restartChan <- true
+				} else {
+					log.Printf("Health check success ✅")
+				}
+			}()
 		}
 	}
 }
