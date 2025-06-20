@@ -54,16 +54,17 @@ func (sc *monitoringService) Run(
 			func() {
 				timedCtx, cancel := context.WithTimeout(ctx, *&timeoutDuration)
 				defer cancel()
+				log.Printf("Health check:")
 				cmd := exec.CommandContext(timedCtx, "proxychains4", "curl", "-4", "icanhazip.com")
 				_, err := cmd.CombinedOutput()
 				if err != nil {
-					log.Printf("Health check failed ❌: %v", err)
+					log.Printf("failed ❌: %v", err)
 					if timedCtx.Err() == context.DeadlineExceeded {
 						log.Printf("Timeout exceeded")
 					}
 					restartChan <- true
 				} else {
-					log.Printf("Health check success ✅")
+					log.Printf("success ✅")
 				}
 			}()
 		}
