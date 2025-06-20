@@ -45,28 +45,39 @@ func (sc *monitoringService) Run(
 	}
 	timeoutDuration := time.Duration(*timeout) * time.Second
 
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Health check stopping due to context cancellation")
-			return nil
-		case <-time.After(interval):
+			return ctx.Err()
+
+		case <-timer.C:
 			func() {
-				timedCtx, cancel := context.WithTimeout(ctx, *&timeoutDuration)
+				// Run the health check logic
+				timedCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
 				defer cancel()
+
 				log.Printf("Health check:")
 				cmd := exec.CommandContext(timedCtx, "proxychains4", "curl", "-4", "icanhazip.com")
-				_, err := cmd.CombinedOutput()
+				output, err := cmd.CombinedOutput()
+
 				if err != nil {
 					log.Printf("failed ❌: %v", err)
 					if timedCtx.Err() == context.DeadlineExceeded {
-						log.Printf("Timeout exceeded")
+						log.Printf("Timeout exceeded after %s", timeoutDuration)
+					} else {
+						log.Printf("Output from failed command: %s", string(output))
 					}
 					restartChan <- true
 				} else {
 					log.Printf("success ✅")
 				}
 			}()
+
+			timer.Reset(interval)
 		}
 	}
 }
