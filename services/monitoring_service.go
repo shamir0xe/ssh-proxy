@@ -50,6 +50,16 @@ func (sc *monitoringService) Run(
 		return fmt.Errorf("Please provide health_check.consecutive_limit")
 	}
 
+	healthCheckCommandString, err := vp.GetString("health_check.command")
+	if err != nil {
+		return fmt.Errorf("Please provide health_check.command")
+	}
+
+	restartCommandString, err := vp.GetString("health_check.restart_command")
+	if err != nil {
+		return fmt.Errorf("Please provide health_check.restart_command")
+	}
+
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
@@ -68,7 +78,7 @@ func (sc *monitoringService) Run(
 				defer cancel()
 
 				log.Printf("Health check:")
-				cmd := exec.CommandContext(timedCtx, "proxychains4", "curl", "-4", "icanhazip.com")
+				cmd := exec.CommandContext(timedCtx, "bash", []string{"-c", *healthCheckCommandString}...)
 				output, err := cmd.CombinedOutput()
 
 				if err != nil {
@@ -81,11 +91,10 @@ func (sc *monitoringService) Run(
 					conLoss++
 					log.Printf("consecutive loss: %d", conLoss)
 					if conLoss > *conLimit {
-						conLoss = 0
-						cmd := exec.CommandContext(ctx, "sudo", "systemctl", "restart", "ptunnel.service")
+						cmd := exec.CommandContext(ctx, "bash", []string{"-c", *restartCommandString}...)
 						_, err = cmd.CombinedOutput()
 						if err != nil {
-							log.Printf("Cannot restart the ptunnel service ❌")
+							log.Printf("Cannot restart the service ❌")
 						}
 
 						return true
