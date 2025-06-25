@@ -64,6 +64,7 @@ func (sc *monitoringService) Run(
 	defer timer.Stop()
 
 	conLoss := 0
+	totalRestart := 0
 
 	for {
 		select {
@@ -91,6 +92,11 @@ func (sc *monitoringService) Run(
 					conLoss++
 					log.Printf("consecutive loss: %d", conLoss)
 					if conLoss > *conLimit {
+						conLoss = 0
+						totalRestart++
+						if totalRestart > 5 {
+							panic(fmt.Errorf("Total number of consecutive restarts exceeded"))
+						}
 						cmd := exec.CommandContext(ctx, "bash", []string{"-c", *restartCommandString}...)
 						_, err = cmd.CombinedOutput()
 						if err != nil {
@@ -101,6 +107,7 @@ func (sc *monitoringService) Run(
 					}
 				} else {
 					conLoss = 0
+					totalRestart = 0
 					log.Printf("success ✅")
 				}
 				return false
