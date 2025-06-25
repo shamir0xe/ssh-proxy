@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"ssh_proxy/dependencies"
 	"sync"
@@ -22,6 +23,32 @@ func NewMonitoringService(
 	config dependencies.ConfigInterface,
 ) (MonitoringServiceInterface, error) {
 	return &monitoringService{config: config}, nil
+}
+
+func updateHealthStatusFile(filePath string, isHealthy bool) {
+	var status string
+	if isHealthy {
+		status = "1"
+	} else {
+		status = "0"
+	}
+
+	// The content to write must be a slice of bytes.
+	// We convert our status string to []byte.
+	content := []byte(status)
+
+	// os.WriteFile handles creating/truncating the file and closing it.
+	// 0644 is a standard file permission:
+	// - The owner can read and write (6)
+	// - The group can only read (4)
+	// - Others can only read (4)
+	err := os.WriteFile(filePath, content, 0644)
+	if err != nil {
+		// Using log.Fatalf will print the error and exit the program.
+		log.Fatalf("Failed to write to health-check file: %v", err)
+	}
+
+	fmt.Printf("Successfully wrote '%s' to %s\n", status, filePath)
 }
 
 func (sc *monitoringService) Run(
@@ -50,14 +77,19 @@ func (sc *monitoringService) Run(
 		return fmt.Errorf("Please provide health_check.consecutive_limit")
 	}
 
+	tunnelLimit, err := vp.GetInteger("health_check.tunnel_limit")
+	if err != nil {
+		return fmt.Errorf("Please provide health_check.tunnel_limit")
+	}
+
 	healthCheckCommandString, err := vp.GetString("health_check.command")
 	if err != nil {
 		return fmt.Errorf("Please provide health_check.command")
 	}
 
-	restartCommandString, err := vp.GetString("health_check.restart_command")
+	healthStatusFile, err := vp.GetString("health_check.file_path")
 	if err != nil {
-		return fmt.Errorf("Please provide health_check.restart_command")
+		return fmt.Errorf("Please provide health_check.file_path")
 	}
 
 	timer := time.NewTimer(0)
@@ -65,8 +97,14 @@ func (sc *monitoringService) Run(
 
 	conLoss := 0
 	totalRestart := 0
+	first := true
 
 	for {
+		if !first {
+			timer.Reset(interval)
+		}
+		first = false
+
 		select {
 		case <-ctx.Done():
 			log.Println("Health check stopping due to context cancellation")
@@ -91,31 +129,32 @@ func (sc *monitoringService) Run(
 					}
 					conLoss++
 					log.Printf("consecutive loss: %d", conLoss)
+
+					// Set the connection limit
 					if conLoss > *conLimit {
 						conLoss = 0
 						totalRestart++
 						if totalRestart > 5 {
 							panic(fmt.Errorf("Total number of consecutive restarts exceeded"))
 						}
-						cmd := exec.CommandContext(ctx, "bash", []string{"-c", *restartCommandString}...)
-						_, err = cmd.CombinedOutput()
-						if err != nil {
-							log.Printf("Cannot restart the service ❌")
-						}
+						updateHealthStatusFile(*healthStatusFile, false)
+					}
 
+					// Check the tunnel limit -- tunnel limit << connection limit
+					if conLoss > *tunnelLimit {
 						return true
 					}
 				} else {
 					conLoss = 0
 					totalRestart = 0
 					log.Printf("success ✅")
+					updateHealthStatusFile(*healthStatusFile, true)
 				}
 				return false
 			}() {
 				restartChan <- true
 			}
 
-			timer.Reset(interval)
 		}
 	}
 }
