@@ -31,7 +31,6 @@ If you have Go installed, you can build and install the latest version with a si
 ```bash
 go install github.com/shamir0xe/ssh-proxy@latest
 ```
-*(Remember to replace `shamir0xe` with your actual GitHub username)*
 
 ### 3. Build from Source
 
