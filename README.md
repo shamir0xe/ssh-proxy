@@ -29,9 +29,9 @@ The easiest way to get started is to download a pre-compiled binary for your ope
 
 If you have Go installed, you can build and install the latest version with a single command:
 ```bash
-go install github.com/your-username/ssh-proxy@latest
+go install github.com/shamir0xe/ssh-proxy@latest
 ```
-*(Remember to replace `your-username` with your actual GitHub username)*
+*(Remember to replace `shamir0xe` with your actual GitHub username)*
 
 ### 3. Build from Source
 
@@ -39,7 +39,7 @@ You can also build the project from the source code.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/ssh-proxy.git
+    git clone https://github.com/shamir0xe/ssh-proxy.git
     cd ssh-proxy
     ```
 
