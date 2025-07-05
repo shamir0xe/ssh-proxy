@@ -1,0 +1,35 @@
+# Your server's SSH info
+server:
+  url: "user@host"
+  port: "22"
+  password: "your-password"
+
+# Local socks config to listen on
+socks:
+  port: "1088" 
+
+health-check:
+  # The command that used to monitor the health of the main tunnel
+  # Here I try to fetch the IP address through the created socks proxy
+  # It should return me the foreign IP address
+  # Feel free to change it for your own need
+  command: "proxychains4 curl -L4 icanhazip.com"  
+
+  # Timeout specified for monitor check commands
+  timeout: 3 
+
+  # File path to write '0' when failure occurs, otherwise writes '1' in it
+  file-path: "/tmp/health-check"
+
+  tunnel-limit: 3
+
+  # If retries failed for this amount, it triggers restart
+  consecutive-limit: 6 
+
+  # w8 time before run script again
+  wait-time: 5 
+
+  # Every 5 seconds, triggers a health-check process
+  interval: 5 
+
+
