@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	"github.com/shamir0xe/ssh-proxy/dependencies"
 	"log"
 	"os"
 	"os/exec"
-	"ssh_proxy/dependencies"
 	"sync"
 	"time"
 )
@@ -60,36 +60,36 @@ func (sc *monitoringService) Run(
 	defer wg.Done()
 	vp := sc.config
 
-	timerInterval, err := vp.GetInteger("health_check.interval")
+	timerInterval, err := vp.GetInteger("health-check.interval")
 	if err != nil {
 		return fmt.Errorf("could not find proper filed: %v", err)
 	}
 	interval := time.Duration(*timerInterval) * time.Second
 
-	timeout, err := vp.GetInteger("health_check.timeout")
+	timeout, err := vp.GetInteger("health-check.timeout")
 	if err != nil {
 		return fmt.Errorf("could not find proper filed: %v", err)
 	}
 	timeoutDuration := time.Duration(*timeout) * time.Second
 
-	conLimit, err := vp.GetInteger("health_check.consecutive_limit")
+	conLimit, err := vp.GetInteger("health-check.consecutive-limit")
 	if err != nil {
-		return fmt.Errorf("Please provide health_check.consecutive_limit")
+		return fmt.Errorf("Please provide health-check.consecutive-limit")
 	}
 
-	tunnelLimit, err := vp.GetInteger("health_check.tunnel_limit")
+	tunnelLimit, err := vp.GetInteger("health-check.tunnel-limit")
 	if err != nil {
-		return fmt.Errorf("Please provide health_check.tunnel_limit")
+		return fmt.Errorf("Please provide health-check.tunnel-limit")
 	}
 
-	healthCheckCommandString, err := vp.GetString("health_check.command")
+	healthCheckCommandString, err := vp.GetString("health-check.command")
 	if err != nil {
-		return fmt.Errorf("Please provide health_check.command")
+		return fmt.Errorf("Please provide health-check.command")
 	}
 
-	healthStatusFile, err := vp.GetString("health_check.file_path")
+	healthStatusFile, err := vp.GetString("health-check.file-path")
 	if err != nil {
-		return fmt.Errorf("Please provide health_check.file_path")
+		return fmt.Errorf("Please provide health-check.file-path")
 	}
 
 	timer := time.NewTimer(0)

@@ -2,9 +2,9 @@ package services
 
 import (
 	"context"
+	"github.com/shamir0xe/ssh-proxy/dependencies"
 	"log"
 	"os/exec"
-	"ssh_proxy/dependencies"
 	"sync"
 	"time"
 )
@@ -56,7 +56,7 @@ func (sc *sshProxyService) Run(
 		return err
 	}
 
-	waitTime, err := vp.GetInteger("health_check.wait_time")
+	waitTime, err := vp.GetInteger("health-check.wait-time")
 	if err != nil {
 		return err
 	}

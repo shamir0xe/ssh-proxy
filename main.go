@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"ssh_proxy/dependencies"
-	"ssh_proxy/services"
+	"github.com/shamir0xe/ssh-proxy/dependencies"
+	"github.com/shamir0xe/ssh-proxy/services"
 
 	"go.uber.org/dig"
 )
