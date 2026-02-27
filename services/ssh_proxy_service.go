@@ -70,9 +70,25 @@ func (sc *sshProxyService) Run(
 			// Use a goroutine to run the command
 			go func() {
 				cmd := exec.CommandContext(
-					tunnelCtx, "sshpass", "-p", *password,
-					"ssh", "-D", *socksPort, "-p", *port,
-					"-C", "-q", "-N", *url,
+					tunnelCtx, "sshpass",
+					"-p", *password,
+					"ssh",
+					"-D", *socksPort,
+					"-p", *port,
+					"-c", "chacha20-poly1305@openssh.com",
+					"-o", "Compression=no",
+					"-o", "TCPKeepAlive=yes",
+					"-o", "ServerAliveInterval=30",
+					"-o", "ServerAliveCountMax=6",
+					"-o", "IPQoS=throughput",
+					"-o", "GSSAPIAuthentication=no",
+					"-o", "ControlMaster=auto",
+					"-o", "ControlPersist=10m",
+					"-o", "ControlPath=/tmp/ssh_mux_%h_%p_%r",
+					"-o", "LogLevel=ERROR",
+					"-q",
+					"-N",
+					*url,
 				)
 
 				log.Printf("Going to start SSH, %v", cmd)
