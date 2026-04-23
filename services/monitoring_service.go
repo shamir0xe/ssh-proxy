@@ -135,7 +135,7 @@ func (sc *monitoringService) Run(
 						conLoss = 0
 						totalRestart++
 						if totalRestart > 5 {
-							panic(fmt.Errorf("Total number of consecutive restarts exceeded"))
+							//panic(fmt.Errorf("Total number of consecutive restarts exceeded"))
 						}
 						updateHealthStatusFile(*healthStatusFile, false)
 					}
